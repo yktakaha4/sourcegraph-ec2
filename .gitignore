@@ -1,0 +1,9 @@
+.envrc
+
+### https://raw.github.com/github/gitignore/f731569cfcc1dbe475f2d160e1e1e582c7cfe2a6/Global/VisualStudioCode.gitignore
+
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
