@@ -1,0 +1,184 @@
+Parameters:
+  ResourceName:
+    Description: Resource Name
+    Type: String
+  AvailabilityZoneName:
+    Description: Availability Zone Name
+    Type: AWS::EC2::AvailabilityZone::Name
+  SubnetId:
+    Description: Subnet ID
+    Type: AWS::EC2::Subnet::Id
+  SecurityGroupIdList:
+    Description: SecurityGroup Id List
+    Type: List<AWS::EC2::SecurityGroup::Id>
+  Ec2ImageId:
+    Description: EC2 Image ID
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
+  Ec2InstanceType:
+    Description: EC2 Instance type
+    Type: String
+    Default: t2.medium
+
+Resources:
+  InstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/CloudWatchLogsFullAccess
+      RoleName:
+        Fn::Sub: ${ResourceName}
+
+  InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      InstanceProfileName:
+        Ref: ResourceName
+      Roles:
+        - Ref: InstanceRole
+
+  ElasticIp:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value:
+            Ref: ResourceName
+
+  NetworkInterface:
+    Type: AWS::EC2::NetworkInterface
+    Properties:
+      SubnetId:
+        Ref: SubnetId
+      Description:
+        Ref: ResourceName
+      GroupSet:
+        Ref: SecurityGroupIdList
+      SourceDestCheck: true
+      Tags:
+        - Key: Name
+          Value:
+            Ref: ResourceName
+
+  ElasticIpAssociation:
+    Type: AWS::EC2::EIPAssociation
+    Properties:
+      InstanceId:
+        Ref: Ec2Instance
+      EIP:
+        Ref: ElasticIp
+
+  Volume:
+    Type: AWS::EC2::Volume
+    Properties:
+      AvailabilityZone:
+        Ref: AvailabilityZoneName
+      Size: 32
+      VolumeType: gp2
+      Tags:
+        - Key: Name
+          Value:
+            Ref: ResourceName
+
+  VolumeAttachment:
+    Type: AWS::EC2::VolumeAttachment
+    Properties:
+      Device: /dev/sdf
+      InstanceId:
+        Ref: Ec2Instance
+      VolumeId:
+        Ref: Volume
+
+  Ec2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId:
+        Ref: Ec2ImageId
+      InstanceType:
+        Ref: Ec2InstanceType
+      Monitoring: false
+      AvailabilityZone:
+        Ref: AvailabilityZoneName
+      SecurityGroupIds:
+        Ref: SecurityGroupIdList
+      SubnetId:
+        Ref: SubnetId
+      IamInstanceProfile:
+        Ref: InstanceProfile
+      UserData:
+        Fn::Base64:
+          Fn::Sub: |
+            #!/bin/bash -e
+            exec > >(tee -a /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
+
+            # install packages
+            yum -y update
+            yum -y install docker awslogs
+
+            # enable awslogs
+            sed -i \
+                -e 's/us-east-1/${AWS::Region}/' \
+                /etc/awslogs/awscli.conf
+            systemctl start awslogsd
+            systemctl enable awslogsd.service
+
+            # mount volumes
+            mkdir -p /data
+            while [ -z "$(lsblk | grep -i xvdf)" ]
+            do
+              sleep 1
+            done
+
+            if [ -z "$(file -s /dev/xvdf | grep -i ext4)" ]
+            then
+              mkfs -t ext4 /dev/xvdf
+            fi
+
+            if [ -z "$(mount | grep xvdf)" ]
+            then
+              echo "/dev/xvdf /data ext4 defaults 0 2" >> /etc/fstab
+              mount -a
+            fi
+
+            # start containers
+            systemctl start docker
+            systemctl enable docker
+
+            mkdir -p /var/sourcegraph/config /data/sourcegraph/data
+            docker run \
+                -d \
+                --name server \
+                --restart=unless-stopped \
+                -p 7080:7080 \
+                -p 2633:2633 \
+                -v /var/sourcegraph/config:/etc/sourcegraph \
+                -v /data/sourcegraph/data:/var/opt/sourcegraph \
+                sourcegraph/server:3.9.4
+
+            # enable https
+            while [ ! -f /var/sourcegraph/config/management/cert.pem ]
+            do
+              sleep 1
+            done
+
+            sed -i \
+                -e '/7080;/a ssl_certificate\ management/cert.pem;' \
+                -e '/7080;/a ssl_certificate_key\ management/key.pem;' \
+                -e 's/7080;/7080 ssl;/' \
+                /var/sourcegraph/config/nginx.conf
+            docker restart server
+
+            # logging cert fingerprint
+            openssl x509 -fingerprint -noout -in /var/sourcegraph/config/management/cert.pem |
+            logger -t cert-fingerprint
+      Tags:
+        - Key: Name
+          Value:
+            Ref: ResourceName
