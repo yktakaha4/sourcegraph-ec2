@@ -2,6 +2,12 @@
 
 cmd="$1"
 
+if [ -n "${STOP_INSTANCE_CONTROL:-}" ]
+then
+  echo "skipped: resource-name=$RESOURCE_NAME, command=$cmd"
+  exit 0
+fi
+
 case "$cmd" in
   "start")
     instance_state="stopped"
