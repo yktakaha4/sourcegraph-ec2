@@ -2,7 +2,7 @@
 
 cmd="$1"
 
-if [ -n "${STOP_INSTANCE_CONTROL:-}" ]
+if [ "${STOP_INSTANCE_CONTROL:-}" = "yes" ]
 then
   echo "skipped: resource-name=$RESOURCE_NAME, command=$cmd"
   exit 0
