@@ -156,6 +156,7 @@ Resources:
                 -d \
                 --name server \
                 --restart=unless-stopped \
+                -p 443:7080 \
                 -p 7080:7080 \
                 -p 2633:2633 \
                 -v /var/sourcegraph/config:/etc/sourcegraph \
