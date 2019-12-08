@@ -183,3 +183,5 @@ Resources:
         - Key: Name
           Value:
             Ref: ResourceName
+        - Key: AutoStart
+          Value: enabled
