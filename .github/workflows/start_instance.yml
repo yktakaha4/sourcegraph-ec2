@@ -1,7 +1,7 @@
 on:
   schedule:
     # 日本時間で月〜金の毎日9時30分に実行
-    - cron: 30 0 ? SUN-THU *
+    - cron: 30 0 * * SUN-THU
 
 name: Start Instance
 
