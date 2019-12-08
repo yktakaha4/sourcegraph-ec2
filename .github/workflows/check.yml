@@ -1,13 +1,10 @@
-on:
-  schedule:
-    # 日本時間で月〜金の毎日9時30分に実行
-    - cron: 30 0 * * SUN-THU
+on: pull_request
 
-name: Start Instance
+name: Check
 
 jobs:
-  start:
-    name: Start Instance
+  check:
+    name: Check
     runs-on: ubuntu-18.04
     steps:
       - uses: actions/checkout@v1
@@ -21,10 +18,13 @@ jobs:
       - name: Install awscli
         run: pip install --upgrade pip awscli
 
-      - name: Start Instance
-        run: ./scripts/instance.bash start
+      - name: Check CloudFormation Template
+        run: aws cloudformation validate-template --template-body file://./aws/cfn.yml
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_DEFAULT_REGION: ${{ secrets.AWS_DEFAULT_REGION }}
           RESOURCE_NAME: ${{ secrets.RESOURCE_NAME }}
+          AVAILABILITY_ZONE: ${{ secrets.AVAILABILITY_ZONE }}
+          SUBNET_ID: ${{ secrets.SUBNET_ID }}
+          SECURITY_GROUP_ID_LIST: ${{ secrets.SECURITY_GROUP_ID_LIST }}

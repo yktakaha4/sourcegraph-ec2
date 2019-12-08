@@ -2,12 +2,6 @@
 
 cmd="$1"
 
-if [ "${STOP_INSTANCE_CONTROL:-}" = "yes" ]
-then
-  echo "skipped: resource-name=$RESOURCE_NAME, command=$cmd"
-  exit 0
-fi
-
 case "$cmd" in
   "start")
     instance_state="stopped"
@@ -24,7 +18,7 @@ case "$cmd" in
 esac
 
 instance_id="$(
-  aws ec2 describe-instances --filters "Name=tag:Name,Values=$RESOURCE_NAME" |
+  aws ec2 describe-instances --filters "Name=tag:Name,Values=$RESOURCE_NAME Name=tag:AutoStart,Values=enabled" |
   jq -r ".Reservations[].Instances[] | [.InstanceId, .State.Name] | select(.[1]==\"$instance_state\")[0]" |
   head -1
 )"
@@ -36,6 +30,5 @@ then
 
 else
   echo "unfound: resource-name=$RESOURCE_NAME, state=$instance_state"
-  exit 1
 
 fi
