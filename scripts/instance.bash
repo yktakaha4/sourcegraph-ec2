@@ -18,7 +18,7 @@ case "$cmd" in
 esac
 
 instance_id="$(
-  aws ec2 describe-instances --filters "Name=tag:Name,Values=$RESOURCE_NAME Name=tag:AutoStart,Values=enabled" |
+  aws ec2 describe-instances --filters "Name=tag:Name,Values=$RESOURCE_NAME" "Name=tag:AutoStart,Values=enabled" |
   jq -r ".Reservations[].Instances[] | [.InstanceId, .State.Name] | select(.[1]==\"$instance_state\")[0]" |
   head -1
 )"
